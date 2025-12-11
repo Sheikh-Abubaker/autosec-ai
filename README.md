@@ -10,4 +10,9 @@ This repo contains:
 
 ## Quickstart (local)
 1. `docker compose up --build -d`
-2. `curl -X POST http://localhost:8080/api/scan -H "Content-Type: application/json" -d '{"repo_url":"https://github.com/example/repo.git"}'`
+2. Run an API scan:
+   ```bash
+    curl -X POST http://localhost:8080/api/scan \
+    -H "Content-Type: application/json" \
+    -d '{"repo_url":"https://github.com/example/repo.git"}
+   ```
