@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  backend:
+    image: sheikhabubaker19/autosec-ai-backend:latest
+    container_name: autosec-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - KESTRA_BASE_URL=http://kestra:8080
+      - KESTRA_NAMESPACE=autosec
+      - KESTRA_WORKFLOW_ID=autosec-scan
+      - KESTRA_BASIC_USERNAME=admin@kestra.io
+      - KESTRA_BASIC_PASSWORD=Admin1234
+
+  kestra:
+    image: kestra/kestra:latest
+    container_name: kestra
+    command: server local
+    ports:
+      - "8081:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - kestra-data:/app/storage
+
+volumes:
+  kestra-data:
