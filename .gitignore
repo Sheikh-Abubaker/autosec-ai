@@ -1,2 +1,2 @@
-# Go modules
-go.sum
+node_modules/
+.next/

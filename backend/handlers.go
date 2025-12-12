@@ -36,34 +36,51 @@ func handleScanRequest(c *gin.Context) {
 	})
 }
 
+func handleGetScanStatus(c *gin.Context) {
+	workflowID := c.Param("workflow_id")
+
+	planData, ok := GetPlan(workflowID)
+	if !ok {
+		c.JSON(200, gin.H{
+			"status": "running",
+		})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"status": "done",
+		"plan":   planData.Plan,
+	})
+}
+
 // POST /api/autofix-plan
 // Called by Kestra when it finishes AI planning
 func handleAutoFixPlan(c *gin.Context) {
 	var plan AutoFixPlan
+
 	if err := c.ShouldBindJSON(&plan); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid autofix plan payload",
-		})
+		c.JSON(400, gin.H{"error": "invalid autofix payload"})
 		return
 	}
 
 	log.Printf("Received AutoFix plan from Kestra: %+v\n", plan)
 
-	// TODO:
-	// 1. Clone repo
-	// 2. Apply changes based on plan (update Dockerfile, etc.)
-	// 3. Commit & push branch
-	// 4. Open PR using GitHub API
-	// For now, stub this:
-	if err := applyAutoFixPlanAndOpenPR(plan); err != nil {
-		log.Printf("failed to apply autofix plan: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to apply autofix plan",
-		})
+	workflowID := c.GetHeader("X-Kestra-Execution-Id")
+	if workflowID == "" {
+		workflowID = c.Query("workflow_id")
+	}
+
+	if workflowID == "" {
+		c.JSON(400, gin.H{"error": "missing workflow_id"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "AutoFix plan applied and PR created",
+	SavePlan(workflowID, plan)
+
+	log.Printf("AutoFix plan stored for workflow %s: %+v", workflowID, plan)
+
+	c.JSON(200, gin.H{
+		"message":     "plan stored",
+		"workflow_id": workflowID,
 	})
 }
