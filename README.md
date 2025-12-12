@@ -1,6 +1,9 @@
 # AutoSec AI
+# Project for the AI Agents Assemble hackathon.
 
-AutoSec AI — Project for the AI Agents Assemble hackathon.
+AutoSec AI — Autonomous Supply Chain Security Agent
+
+An AI agent that scans GitHub repos and finds vulnerabilities
 
 This repo contains:
 - Go backend (API endpoints `/api/scan` and `/api/autofix-plan`)
