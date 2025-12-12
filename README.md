@@ -17,5 +17,5 @@ This repo contains:
    ```bash
     curl -X POST http://localhost:8080/api/scan \
     -H "Content-Type: application/json" \
-    -d '{"repo_url":"https://github.com/example/repo.git"}
+    -d '{"repo_url":"https://github.com/example/repo.git"}`
    ```
