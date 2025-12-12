@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   backend:
-    image: sheikhabubaker19/autosec-ai-backend:latest
+    image: sheikhabubaker19/autosec-ai-backend:UI-test
     container_name: autosec-backend
     ports:
       - "8080:8080"

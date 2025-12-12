@@ -1,5 +1,7 @@
 package main
 
+import "time"
+
 // ScanRequest is the payload from the frontend when user clicks "Scan & Auto-Fix"
 type ScanRequest struct {
 	RepoURL string `json:"repo_url" binding:"required"`
@@ -19,4 +21,10 @@ type AutoFixPlan struct {
 	FixStrategy string `json:"fix_strategy"` // e.g. "bump_base_image"
 	FromImage   string `json:"from_image,omitempty"`
 	ToImage     string `json:"to_image,omitempty"`
+}
+
+type StoredPlan struct {
+	WorkflowID string      `json:"workflow_id"`
+	Plan       AutoFixPlan `json:"plan"`
+	CreatedAt  time.Time   `json:"created_at"`
 }

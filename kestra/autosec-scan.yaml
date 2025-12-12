@@ -1,0 +1,30 @@
+id: autosec-scan
+namespace: autosec
+description: "Autosec demo (fallback): produce AutoFixPlan inline and send to backend"
+
+inputs:
+  - id: repo_url
+    type: STRING
+
+tasks:
+  - id: log-input
+    type: io.kestra.plugin.core.log.Log
+    message: "Starting fallback scan for {{ inputs.repo_url }}"
+
+  # send the AutoFixPlan directly by constructing JSON in the request body
+  - id: send-plan
+    type: io.kestra.plugin.core.http.Request
+    uri: "http://backend:8080/api/autofix-plan"
+    method: POST
+    headers:
+      Content-Type: "application/json"
+      X-Kestra-Execution-Id: "{{ execution.id }}"
+    # construct the JSON body inline with Kestra expressions
+    body: |
+      {
+        "repo_url": "{{ inputs.repo_url }}",
+        "summary": "Found 1 medium CVE in base image. Suggested to bump base image.",
+        "fix_strategy": "bump_base_image",
+        "from_image": "python:3.10-slim",
+        "to_image": "python:3.11-slim"
+      }
