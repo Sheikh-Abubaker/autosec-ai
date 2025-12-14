@@ -9,7 +9,7 @@ This repo contains:
 - Go backend (API endpoints `/api/scan` and `/api/autofix-plan`)
 - Kestra workflows for driving Syft/Grype/AI scans
 - Docker Compose for local development
-- Minimal frontend planned for Vercel deployment
+- Next.js based frontend Vercel deployment
 
 ## Quickstart (local)
 1. `docker compose up --build -d`
