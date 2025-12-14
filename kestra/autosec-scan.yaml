@@ -1,30 +1,287 @@
 id: autosec-scan
 namespace: autosec
-description: "Autosec demo (fallback): produce AutoFixPlan inline and send to backend"
 
 inputs:
   - id: repo_url
     type: STRING
+    required: true
+  - id: target_branch
+    type: STRING
+    defaults: main
 
 tasks:
-  - id: log-input
-    type: io.kestra.plugin.core.log.Log
-    message: "Starting fallback scan for {{ inputs.repo_url }}"
+  - id: wdir
+    type: io.kestra.plugin.core.flow.WorkingDirectory
+    tasks:
+      # 1️⃣ Clone repo into the working directory
+      - id: clone_repo
+        type: io.kestra.plugin.git.Clone
+        url: "{{ inputs.repo_url }}"
+        branch: main
 
-  # send the AutoFixPlan directly by constructing JSON in the request body
-  - id: send-plan
-    type: io.kestra.plugin.core.http.Request
-    uri: "http://backend:8080/api/autofix-plan"
-    method: POST
-    headers:
-      Content-Type: "application/json"
-      X-Kestra-Execution-Id: "{{ execution.id }}"
-    # construct the JSON body inline with Kestra expressions
-    body: |
-      {
-        "repo_url": "{{ inputs.repo_url }}",
-        "summary": "Found 1 medium CVE in base image. Suggested to bump base image.",
-        "fix_strategy": "bump_base_image",
-        "from_image": "python:3.10-slim",
-        "to_image": "python:3.11-slim"
-      }
+#       # 2️⃣ Generate SBOM using shell to write directly to working directory
+      - id: syft_sbom
+        type: io.kestra.plugin.scripts.shell.Commands
+        beforeCommands:
+          - apt update && apt install curl -y
+          - curl -sSfL https://get.anchore.io/syft | sh -s -- -b /usr/local/bin
+        commands:
+          - syft version
+          - syft scan {{ outputs.clone_repo["directory"] }} -o json > sbom.json
+        outputFiles:
+          - sbom.json
+
+      # 3️⃣ Scan SBOM with Grype
+      - id: grype_scan
+        type: io.kestra.plugin.scripts.shell.Commands
+        beforeCommands:
+          - apt update && apt install curl -y
+          - curl -sSfL https://get.anchore.io/grype | sh -s -- -b /usr/local/bin
+        commands:
+          - grype version
+          - grype sbom:{{ outputs.syft_sbom["outputFiles"]["sbom.json"] }} -o json > grype.json
+        outputFiles:
+          - grype.json
+
+      - id: build_ai_prompt
+        type: io.kestra.plugin.scripts.python.Script
+        outputFiles:
+          - grype-ai-prompt.json
+        script: |
+          import json
+          from collections import Counter
+
+          INPUT_FILE = "{{ outputs.grype_scan['outputFiles']['grype.json'] }}"
+          OUTPUT_FILE = "grype-ai-prompt.json"
+
+          SEVERITY_RANK = {
+              "Critical": 3,
+              "High": 2,
+              "Medium": 1,
+              "Low": 0
+          }
+
+          def calculate_priority(severity, epss, risk):
+              if severity == "Critical" or (epss is not None and epss >= 50):
+                  return "P0"
+              if severity == "High" or (epss is not None and epss >= 20):
+                  return "P1"
+              if severity == "Medium":
+                  return "P2"
+              return "P3"
+
+          def extract_fixed_versions(vuln, match_details):
+              versions = vuln.get("fix", {}).get("versions", [])
+              if versions:
+                  return ",".join(versions)
+
+              for md in match_details:
+                  fix = md.get("fix", {})
+                  if fix.get("suggestedVersion"):
+                      return fix["suggestedVersion"]
+
+              return None
+
+          def extract_epss(vuln):
+              epss_list = vuln.get("epss", [])
+              if isinstance(epss_list, list) and epss_list:
+                  return epss_list[0].get("percentile")
+              return None
+
+          with open(INPUT_FILE, "r") as f:
+              data = json.load(f)
+
+          seen = set()
+          rows = []
+
+          for match in data.get("matches", []):
+              artifact = match.get("artifact", {})
+              vuln = match.get("vulnerability", {})
+              match_details = match.get("matchDetails", [])
+
+              name = artifact.get("name")
+              version = artifact.get("version")
+              vuln_id = vuln.get("id")
+
+              key = (name, version, vuln_id)
+              if key in seen:
+                  continue
+              seen.add(key)
+
+              severity = vuln.get("severity", "Unknown")
+
+              # 🔴 keep only what matters (tune if needed)
+              if severity not in ("Critical", "High", "Medium"):
+                  continue
+
+              epss = extract_epss(vuln)
+              risk = vuln.get("risk")
+              fixed_in = extract_fixed_versions(vuln, match_details)
+
+              rows.append({
+                  "name": name,
+                  "installed": version,
+                  "fixed_in": fixed_in,
+                  "type": artifact.get("type"),
+                  "vulnerability": vuln_id,
+                  "severity": severity,
+                  "epss_percentile": epss,
+                  "risk": risk,
+                  "priority": calculate_priority(severity, epss, risk)
+              })
+
+          # Sort like Grype CLI: severity → EPSS → risk
+          rows.sort(
+              key=lambda r: (
+                  SEVERITY_RANK.get(r["severity"], -1),
+                  r["epss_percentile"] or 0,
+                  r["risk"] or 0
+              ),
+              reverse=True
+          )
+
+          # ✅ SUMMARY COMPUTATION (THIS IS THE MISSING PIECE)
+          severity_counter = Counter()
+          priority_counter = Counter()
+          unique_vulns = set()
+
+          for r in rows:
+              if r.get("severity"):
+                  severity_counter[r["severity"]] += 1
+              if r.get("priority"):
+                  priority_counter[r["priority"]] += 1
+              if r.get("vulnerability"):
+                  unique_vulns.add(r["vulnerability"])
+
+          output = {
+              "summary": {
+                  "total_findings": len(rows),
+                  "unique_vulnerabilities": len(unique_vulns),
+                  "severity_counts": dict(severity_counter),
+                  "priority_counts": dict(priority_counter)
+              },
+              "findings": rows
+          }
+
+          with open(OUTPUT_FILE, "w") as f:
+              json.dump(output, f, indent=2)
+
+          print(f"✅ Wrote {len(rows)} findings with summary to {OUTPUT_FILE}")
+
+      - id: fetch_values
+        type: io.kestra.plugin.scripts.shell.Commands
+        beforeCommands:
+          - apt update && apt-get install jq -y
+        commands:
+          - jq '.summary.unique_vulnerabilities' {{ outputs["build_ai_prompt"]["outputFiles"]["grype-ai-prompt.json"] }} > vul.txt
+          - jq '.summary.severity_counts.Critical' {{ outputs["build_ai_prompt"]["outputFiles"]["grype-ai-prompt.json"] }} > cr.txt
+          - jq '.summary.severity_counts.High' {{ outputs["build_ai_prompt"]["outputFiles"]["grype-ai-prompt.json"] }} > hi.txt
+          - jq '.summary.severity_counts.Medium' {{ outputs["build_ai_prompt"]["outputFiles"]["grype-ai-prompt.json"] }} > med.txt
+          # Output as variables using ::outputs::
+          - echo "::outputs::{\"vulnerabilities\":$(cat vul.txt),\"critical\":$(cat cr.txt),\"high\":$(cat hi.txt),\"medium\":$(cat med.txt)}"
+        outputFiles:
+          - vul.txt
+          - cr.txt
+          - hi.txt
+          - med.txt
+
+
+      - id: ai_summary
+        type: io.kestra.plugin.ai.agent.AIAgent
+        prompt: |
+          You are a vulnerability analysis agent.
+
+          We have detected {{ read(outputs.fetch_values.outputFiles['vul.txt']) }} unique vulnerabilities.
+
+          Severity breakdown:
+          - Critical: {{ read(outputs.fetch_values.outputFiles['cr.txt']) }}
+          - High: {{ read(outputs.fetch_values.outputFiles['hi.txt']) }}
+          - Medium: {{ read(outputs.fetch_values.outputFiles['med.txt']) }}
+
+          Tasks:
+          1. Summarize the Critical and High vulnerabilities.
+          2. Identify exploitable risks.
+          3. Recommend remediation steps.
+        provider:
+          type: io.kestra.plugin.ai.provider.GoogleGemini
+          modelName: gemini-2.5-flash
+          apiKey: "{{ kv('GEMINI_API_KEY') }}"
+        outputFiles:
+          - Plan.md
+
+      - id: build_autofix_payload
+        type: io.kestra.plugin.scripts.python.Script
+        outputFiles:
+          - autofix-payload.json
+        script: |
+          import json
+
+          INPUT_FILE = "{{ outputs["build_ai_prompt"]["outputFiles"]["grype-ai-prompt.json"] }}"
+          OUTPUT_FILE = "autofix-payload.json"
+
+          with open(INPUT_FILE) as f:
+              data = json.load(f)
+
+          # pick the first finding (already sorted by severity)
+          finding = data["findings"][0]
+
+          payload = {
+              "repo_url": "{{ inputs.repo_url }}",
+              "summary": f"Found {data['summary']['unique_vulnerabilities']} vulnerabilities. "
+                        f"Critical: {data['summary']['severity_counts'].get('Critical', 0)}, "
+                        f"High: {data['summary']['severity_counts'].get('High', 0)}.",
+
+              "fix_strategy": "upgrade_dependency",
+
+              # 🔑 IMPORTANT MAPPING
+              "from_image": f"{finding['name']}:{finding['installed']}",
+              "to_image": f"{finding['name']}:{finding['fixed_in']}"
+          }
+
+          with open(OUTPUT_FILE, "w") as f:
+              json.dump(payload, f, indent=2)
+
+          print("✅ AutoFix payload generated")
+
+
+
+        # send the AutoFixPlan directly by constructing JSON in the request body
+      - id: send_autofix_plan
+        type: io.kestra.plugin.core.http.Request
+        uri: "http://backend:8080/api/autofix-plan"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+          X-Kestra-Execution-Id: "{{ execution.id }}"
+        body: "{{ read(outputs['build_autofix_payload']['outputFiles']['autofix-payload.json']) }}"
+
+
+
+      # # 4️⃣ AI Summary
+      # - id: ai_summary
+      #   type: io.kestra.plugin.ai.agent.AIAgent
+      #   prompt: |
+      #     You are a security analysis agent.
+
+      #     Analyze the following Grype vulnerability scan result
+      #     and summarize:
+      #     - Critical & High CVEs
+      #     - Exploitable risks
+      #     - Recommended remediation steps
+
+      #     Grype JSON:
+      #     {{ outputs.read_grype.stdOut }}
+      #   provider:
+      #     type: io.kestra.plugin.ai.provider.GoogleGemini
+      #     modelName: gemini-2.5-flash
+      #     apiKey: "{{ kv('GEMINI_API_KEY') }}"
+      #   outputFiles:
+      #     - Plan.md
+
+# pluginDefaults:
+#   - type: io.kestra.plugin.ai.agent.AIAgent
+#     values:
+#       provider:
+#         type: io.kestra.plugin.ai.provider.GoogleGemini
+#         modelName: gemini-2.0-flash
+#         apiKey: "{{ kv('GEMINI_API_KEY') }}"
