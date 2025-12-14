@@ -14,7 +14,7 @@ func main() {
 
 	// ADD THIS
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000", "https://autosec-ai.vercel.app"},
+		AllowOrigins:     []string{"http://localhost:3000", "https://autosec-ai.vercel.app", "https://autosec-ai-frontend.vercel.app", "https://autosec-41z9w3vlk-sheikh-abubakers-projects.vercel.app", "https://autosec-ai-frontend-f07nro4zd-sheikh-abubakers-projects.vercel.app"},
 		AllowMethods:     []string{"GET", "POST", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		AllowCredentials: true,
