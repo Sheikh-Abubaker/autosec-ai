@@ -10,8 +10,8 @@ services:
       - KESTRA_BASE_URL=http://kestra:8080
       - KESTRA_NAMESPACE=autosec
       - KESTRA_WORKFLOW_ID=autosec-scan
-      - KESTRA_BASIC_USERNAME=admin@kestra.io
-      - KESTRA_BASIC_PASSWORD=Admin1234
+      - KESTRA_BASIC_USERNAME=user_email
+      - KESTRA_BASIC_PASSWORD=user_pass
 
   kestra:
     image: kestra/kestra:latest
