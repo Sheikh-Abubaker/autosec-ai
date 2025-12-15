@@ -133,14 +133,15 @@ export default function Home() {
         {status === "running" && (
           <div style={{ marginTop: 12 }}>
             <strong>Scan in progress</strong>
-            {workflowId && <div>Workflow ID: <code>{workflowId}</code></div>}
-            <div style={{ marginTop: 8 }}>Polling for results...</div>
+            <div style={{ marginTop: 8 }}></div>
           </div>
         )}
 
         {status === "done" && plan && (
           <div style={{ marginTop: 16 }}>
             <h3>AutoFix Plan</h3>
+            <div><strong>Vulnerability</strong></div>
+            <p>{plan.vulnerability}</p>
             <div><strong>Summary</strong></div>
             <p>{plan.summary}</p>
 
