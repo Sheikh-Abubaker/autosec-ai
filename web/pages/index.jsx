@@ -118,7 +118,7 @@ export default function Home() {
             Start Scan
           </button>
           <button
-            style={{ ...styles.button, marginLeft: 8, background: "#eee" }}
+            style={{ ...styles.button, marginLeft: 8 }}
             onClick={() => {
               setRepoUrl("");
               setWorkflowId(null);
