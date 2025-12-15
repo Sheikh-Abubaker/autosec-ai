@@ -106,7 +106,7 @@ export default function Home() {
       <h1 style={styles.h1}>AutoSec AI — Scan & Fix Preview</h1>
 
       <div style={styles.card}>
-        <label style={styles.label}>Repository URL (NOTE: Currently supports public GitHub repositories with the main branch only)</label>
+        <label style={styles.label}>Repository URL (Note: This currently supports public GitHub repositories that use the main branch and include dependencies.)</label>
         <input
           style={styles.input}
           placeholder="https://github.com/owner/repo.git"
@@ -118,7 +118,7 @@ export default function Home() {
             Start Scan
           </button>
           <button
-            style={{ ...styles.button, marginLeft: 8, background: "#eee" }}
+            style={{ ...styles.button, marginLeft: 8 }}
             onClick={() => {
               setRepoUrl("");
               setWorkflowId(null);
