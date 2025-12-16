@@ -103,6 +103,12 @@ export default function Home() {
 
   return (
     <div style={styles.page}>
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
       <h1 style={styles.h1}>AutoSec AI — Scan & Fix Preview</h1>
 
       <div style={styles.card}>
@@ -131,9 +137,10 @@ export default function Home() {
         </div>
 
         {status === "running" && (
-          <div style={{ marginTop: 12 }}>
-            <strong>Scan in progress</strong>
-            <div style={{ marginTop: 8 }}></div>
+          <div style={styles.loadingContainer}>
+            <div style={styles.spinner}></div>
+            <strong>Scan in progress...</strong>
+            <p style={{ color: "#666", marginTop: 8 }}>Analyzing repository for vulnerabilities</p>
           </div>
         )}
 
@@ -224,5 +231,24 @@ const styles = {
     padding: 10,
     borderRadius: 6,
     overflowX: "auto",
+  },
+  loadingContainer: {
+    marginTop: 16,
+    padding: 20,
+    background: "#f8f9fa",
+    borderRadius: 8,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  spinner: {
+    width: 40,
+    height: 40,
+    border: "4px solid #f3f3f3",
+    borderTop: "4px solid #111",
+    borderRadius: "50%",
+    animation: "spin 1s linear infinite",
+    marginBottom: 12,
   },
 };
