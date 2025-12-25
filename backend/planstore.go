@@ -20,6 +20,18 @@ func SavePlan(workflowID string, plan AutoFixPlan) {
 	}
 }
 
+func SaveFailure(workflowID, error, failedTask string) {
+	planMutex.Lock()
+	defer planMutex.Unlock()
+	planStore[workflowID] = StoredPlan{
+		WorkflowID: workflowID,
+		FailedTask: failedTask,
+		Status:     "failed",
+		Error:      error,
+		CreatedAt:  time.Now(),
+	}
+}
+
 func GetPlan(workflowID string) (StoredPlan, bool) {
 	planMutex.RLock()
 	defer planMutex.RUnlock()
