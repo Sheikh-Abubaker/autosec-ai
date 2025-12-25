@@ -24,7 +24,13 @@ export default function Home() {
               setPolling(false);
             } else if (data.status === "running") {
               setStatus("running");
-            } else {
+            } else if (data.status === "failed") {
+              // NEW: surface backend-reported failure
+              const msg = data.error || "Scan failed due to an unknown error.";
+              setError(msg);
+              setStatus("error");
+              setPolling(false);
+            }else {
               // unknown state
               setStatus("running");
             }

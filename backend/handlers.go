@@ -47,6 +47,15 @@ func handleGetScanStatus(c *gin.Context) {
 		return
 	}
 
+	if planData.Status == "failed" {
+		c.JSON(200, gin.H{
+			"status":      "failed",
+			"error":       planData.Error,
+			"failed_task": planData.FailedTask,
+		})
+		return
+	}
+
 	c.JSON(200, gin.H{
 		"status": "done",
 		"plan":   planData.Plan,
@@ -83,4 +92,29 @@ func handleAutoFixPlan(c *gin.Context) {
 		"message":     "plan stored",
 		"workflow_id": workflowID,
 	})
+}
+
+// ...existing code...
+
+// POST /api/scan-failure
+// Called by Kestra when workflow fails
+func handleScanFailure(c *gin.Context) {
+	var failure struct {
+		WorkflowID string `json:"workflow_id"`
+		Error      string `json:"error"`
+		FailedTask string `json:"failed_task"`
+	}
+
+	if err := c.ShouldBindJSON(&failure); err != nil {
+		c.JSON(400, gin.H{"error": "invalid failure payload"})
+		return
+	}
+
+	log.Printf("Workflow %s failed at task %s: %s\n",
+		failure.WorkflowID, failure.FailedTask, failure.Error)
+
+	// Store failure status
+	SaveFailure(failure.WorkflowID, failure.Error, failure.FailedTask)
+
+	c.JSON(200, gin.H{"message": "failure recorded"})
 }

@@ -7,6 +7,7 @@ func registerRoutes(r *gin.Engine) {
 	{
 		api.POST("/scan", handleScanRequest)
 		api.POST("/autofix-plan", handleAutoFixPlan) // callback from Kestra
+		api.POST("/scan-failure", handleScanFailure) // NEW
 		// NEW ENDPOINT
 		api.GET("/scan/:workflow_id", handleGetScanStatus)
 	}

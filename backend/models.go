@@ -27,5 +27,8 @@ type AutoFixPlan struct {
 type StoredPlan struct {
 	WorkflowID string      `json:"workflow_id"`
 	Plan       AutoFixPlan `json:"plan"`
+	Status     string      `json:"status"`
+	FailedTask string      `json:"failed_task,omitempty"`
+	Error      string      `json:"error"`
 	CreatedAt  time.Time   `json:"created_at"`
 }
